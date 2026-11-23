@@ -19,8 +19,10 @@ export TA_PORT="${PORT:-${TA_PORT:-8000}}"
 # the hosts listed in TA_HOST.
 case " $TA_HOST " in *healthcheck.railway.app*) ;; *) export TA_HOST="${TA_HOST:-localhost} healthcheck.railway.app" ;; esac
 
-WEB_WORKERS="${TA_WEB_WORKERS:-2}"
-CELERY_CONCURRENCY="${TA_CELERY_CONCURRENCY:-2}"
+# Each web or Celery worker is a ~100 MB Python process. Defaults fit a 0.5 GB
+# service; raise TA_WEB_WORKERS / TA_CELERY_CONCURRENCY on bigger plans.
+WEB_WORKERS="${TA_WEB_WORKERS:-1}"
+CELERY_CONCURRENCY="${TA_CELERY_CONCURRENCY:-1}"
 if [[ -n "$DJANGO_DEBUG" ]]; then LOGLEVEL=DEBUG; UVLOG=info; else LOGLEVEL=INFO; UVLOG=warning; fi
 
 for v in TA_PASSWORD ELASTIC_PASSWORD ES_URL REDIS_CON; do
