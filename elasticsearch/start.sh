@@ -12,16 +12,16 @@ if [ -z "$ELASTIC_PASSWORD" ]; then
 fi
 
 # Heap: ES_JAVA_OPTS wins if set. Otherwise size it from the container's memory
-# limit: 35% of it, at least 128 MB and at most 1 GB (Tube Archivist's indexes are
-# small). Off-heap memory (direct buffers, code cache) is capped too, so the whole
-# JVM fits in a 0.5 GB Railway service.
+# limit: 35% of it, at least 160 MB and at most 512 MB (Tube Archivist's indexes
+# are small). Off-heap memory is capped too. Elasticsearch needs about 1 GB of RAM
+# in total; it does not fit in a 0.5 GB service.
 if [ -z "$ES_JAVA_OPTS" ]; then
   LIMIT=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
   if [ "$LIMIT" = "max" ] || [ -z "$LIMIT" ]; then LIMIT=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) * 1024 )); fi
   HEAP_MB=$(( LIMIT / 1024 / 1024 * 35 / 100 ))
-  [ "$HEAP_MB" -lt 128 ] && HEAP_MB=128
-  [ "$HEAP_MB" -gt 1024 ] && HEAP_MB=1024
-  export ES_JAVA_OPTS="-Xms${HEAP_MB}m -Xmx${HEAP_MB}m -XX:MaxDirectMemorySize=$(( HEAP_MB / 2 ))m -XX:ReservedCodeCacheSize=64m -Xss512k"
+  [ "$HEAP_MB" -lt 160 ] && HEAP_MB=160
+  [ "$HEAP_MB" -gt 512 ] && HEAP_MB=512
+  export ES_JAVA_OPTS="-Xms${HEAP_MB}m -Xmx${HEAP_MB}m -XX:MaxDirectMemorySize=$(( HEAP_MB / 2 ))m -XX:ReservedCodeCacheSize=96m -Xss512k"
 fi
 
 mkdir -p "$DATA_DIR/snapshot"
@@ -48,7 +48,17 @@ http.host: "::"
 http.port: $PORT
 transport.host: 127.0.0.1
 node.store.allow_mmap: $MMAP
+# One processor's worth of thread pools: fewer threads, less memory.
+node.processors: 1
+# Features Tube Archivist doesn't use are off, to keep memory low.
 xpack.ml.enabled: false
+xpack.watcher.enabled: false
+xpack.profiling.enabled: false
+xpack.apm_data.enabled: false
+xpack.otel_data.registry.enabled: false
+stack.templates.enabled: false
+ingest.geoip.downloader.enabled: false
+indices.lifecycle.history_index_enabled: false
 xpack.security.enabled: true
 xpack.security.enrollment.enabled: false
 xpack.security.http.ssl.enabled: false
