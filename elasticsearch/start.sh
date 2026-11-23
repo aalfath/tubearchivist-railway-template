@@ -12,15 +12,16 @@ if [ -z "$ELASTIC_PASSWORD" ]; then
 fi
 
 # Heap: ES_JAVA_OPTS wins if set. Otherwise size it from the container's memory
-# limit: 40% of it, at least 128 MB and at most 1 GB (Tube Archivist's indexes are
-# small; the rest of the memory is left to the OS file cache).
+# limit: 35% of it, at least 128 MB and at most 1 GB (Tube Archivist's indexes are
+# small). Off-heap memory (direct buffers, code cache) is capped too, so the whole
+# JVM fits in a 0.5 GB Railway service.
 if [ -z "$ES_JAVA_OPTS" ]; then
   LIMIT=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
   if [ "$LIMIT" = "max" ] || [ -z "$LIMIT" ]; then LIMIT=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) * 1024 )); fi
-  HEAP_MB=$(( LIMIT / 1024 / 1024 * 40 / 100 ))
+  HEAP_MB=$(( LIMIT / 1024 / 1024 * 35 / 100 ))
   [ "$HEAP_MB" -lt 128 ] && HEAP_MB=128
   [ "$HEAP_MB" -gt 1024 ] && HEAP_MB=1024
-  export ES_JAVA_OPTS="-Xms${HEAP_MB}m -Xmx${HEAP_MB}m -XX:ActiveProcessorCount=${ES_CPUS:-2}"
+  export ES_JAVA_OPTS="-Xms${HEAP_MB}m -Xmx${HEAP_MB}m -XX:MaxDirectMemorySize=$(( HEAP_MB / 2 ))m -XX:ReservedCodeCacheSize=64m -Xss512k"
 fi
 
 mkdir -p "$DATA_DIR/snapshot"
@@ -47,7 +48,6 @@ http.host: "::"
 http.port: $PORT
 transport.host: 127.0.0.1
 node.store.allow_mmap: $MMAP
-node.processors: ${ES_CPUS:-2}
 xpack.ml.enabled: false
 xpack.security.enabled: true
 xpack.security.enrollment.enabled: false
